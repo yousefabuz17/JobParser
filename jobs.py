@@ -13,13 +13,28 @@ def _add_hyperlink():
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             doc, doc_name = await func(*args, **kwargs)
-            for i in doc.paragraphs:
-                if re.search(r'https://', i.text):
-                    hyperlink = i.hyperlink
-            
+            for paragraph in doc.paragraphs:
+                for run in paragraph.runs:
+                    if re.search(r'https://', run.text):
+                        hyperlink = run.text
+                        run.text = ''
+                        hyperlink_run = run._r
+                        hyperlink_element = OxmlElement('w:hyperlink')
+                        hyperlink_element.set('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id',
+                                                run.part.relate_to(hyperlink_run, 'hyperlink'))
+                        new_run = OxmlElement('w:r')
+                        new_run.append(hyperlink_element)
+                        new_run.text = hyperlink
+                        print(hyperlink)
+                        paragraph._p.insert(paragraph._p.index(hyperlink_run), new_run)
+                        paragraph._p.remove(hyperlink_run)
             return doc, doc_name
         return wrapper
     return decorator
+
+
+
+
 
 def _modify_properties():
     def decorator(func):
@@ -72,7 +87,7 @@ async def pdf_reader():
         all_text = [pdf.pages[i].extract_text().split('\n') for i in range(len(pdf.pages))]
     return all_text
 
-@_add_hyperlink()
+# @_add_hyperlink()
 @_modify_properties()
 @_export_to_docx()
 async def pdf_to_doc(pdf, location=None):
@@ -85,7 +100,6 @@ async def pdf_to_doc(pdf, location=None):
 async def main():
     pdf_text = await pdf_reader()
     docx = await pdf_to_doc(pdf_text, location=None)
-    pprint(docx[0].core_properties.author)
 
 if __name__ == '__main__':
     asyncio.run(main())
